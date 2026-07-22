@@ -44,6 +44,35 @@ namespace MultiSaver.ConfigData
 
         public bool IsSynced = false;
 
+        public enum OrientationType { Auto, Horizontal, Vertical }
+        public OrientationType Orientation = OrientationType.Auto;
+
+        /// <summary>
+        /// Calcula la orientación del monitor basado en sus dimensiones
+        /// </summary>
+        public OrientationType GetCalculatedOrientation()
+        {
+            if (Orientation != OrientationType.Auto)
+                return Orientation;
+
+            if (Bounds.Width > Bounds.Height)
+                return OrientationType.Horizontal;
+            else if (Bounds.Height > Bounds.Width)
+                return OrientationType.Vertical;
+            else
+                return OrientationType.Horizontal; // Default para cuadrados
+        }
+
+        /// <summary>
+        /// Retorna la carpeta de imágenes según la orientación calculada
+        /// </summary>
+        public string GetImageFolder(string baseImagePath)
+        {
+            var orientation = GetCalculatedOrientation();
+            return System.IO.Path.Combine(baseImagePath, 
+                orientation == OrientationType.Vertical ? "vertical" : "horizontal");
+        }
+
     }
 
 }

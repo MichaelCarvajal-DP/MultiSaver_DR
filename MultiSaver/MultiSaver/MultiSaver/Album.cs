@@ -73,6 +73,8 @@ namespace MultiSaver
 
         public IntPtr Handler;
 
+        public ConfigData.Monitor.OrientationType RequiredOrientation = ConfigData.Monitor.OrientationType.Horizontal;
+
         public Album()
         {
             
@@ -93,6 +95,86 @@ namespace MultiSaver
             else
                 return "Spiral";
 
+        }
+
+        /// <summary>
+        /// Carga imágenes desde la carpeta Location con filtro por orientación
+        /// Intenta cargar desde carpeta correcta (horizontal/vertical), luego fallback
+        /// </summary>
+        private void LoadImagesWithOrientation()
+        {
+            if (string.IsNullOrEmpty(Location))
+                return;
+
+            try
+            {
+                // Intenta carpeta de orientación específica primero
+                string orientationFolder = Path.Combine(Location, 
+                    RequiredOrientation == ConfigData.Monitor.OrientationType.Vertical ? "vertical" : "horizontal");
+                
+                if (Directory.Exists(orientationFolder))
+                {
+                    LoadImagesFromFolder(orientationFolder);
+                }
+
+                // Si no hay imágenes, intenta carpeta raíz
+                if (Images.Count == 0 && Directory.Exists(Location))
+                {
+                    LoadImagesFromFolder(Location);
+                }
+
+                // Si aún no hay imágenes, intenta la otra orientación
+                if (Images.Count == 0)
+                {
+                    string altOrientationFolder = Path.Combine(Location,
+                        RequiredOrientation != ConfigData.Monitor.OrientationType.Vertical ? "vertical" : "horizontal");
+                    if (Directory.Exists(altOrientationFolder))
+                    {
+                        LoadImagesFromFolder(altOrientationFolder);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading images: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Carga todas las imágenes soportadas de una carpeta
+        /// </summary>
+        private void LoadImagesFromFolder(string folderPath)
+        {
+            try
+            {
+                if (!Directory.Exists(folderPath))
+                    return;
+
+                string[] extensions = { ".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".bmp", ".BMP", ".gif", ".GIF" };
+                var files = Directory.GetFiles(folderPath);
+
+                foreach (string picture in files)
+                {
+                    if (extensions.Any(ext => picture.EndsWith(ext)))
+                    {
+                        try
+                        {
+                            using (FileStream fs = new FileStream(picture, FileMode.Open))
+                            {
+                                Images.Add(Texture2D.FromStream(GraphicsDevice, fs));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error loading image {picture}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in LoadImagesFromFolder: {ex.Message}");
+            }
         }
 
         protected override void Initialize()
@@ -156,20 +238,8 @@ namespace MultiSaver
             SpiralInEffect = Content.Load<Effect>("SpiralIn");
             SpiralOutEffect = Content.Load<Effect>("SpiralOut");
 
-            String[] Files = Directory.Exists(Location) ? Directory.GetFiles(Location) : new string[0];
-
-            foreach (String Picture in Files)
-            {
-
-                if (Picture.Contains(".png") || Picture.Contains(".PNG") || Picture.Contains(".jpg") || Picture.Contains(".JPG"))
-                {
-                    FileStream FS = new FileStream(Picture, FileMode.Open);
-                    Images.Add(Texture2D.FromStream(GraphicsDevice, FS));
-                    FS.Close();
-
-                }
-
-            }
+            // Cargar imágenes con soporte a orientación
+            LoadImagesWithOrientation();
 
             if (Images.Count == 0)
             {

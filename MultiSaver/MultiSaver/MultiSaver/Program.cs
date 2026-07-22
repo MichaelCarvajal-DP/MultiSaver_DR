@@ -89,11 +89,37 @@ namespace MultiSaver
 
                     ConfigSettings.Load();
 
+                    // Sincronizar imágenes desde Wasabi si credenciales están configuradas
+                    if (!string.IsNullOrEmpty(ConfigSettings.WasabiAccessKey) && 
+                        !string.IsNullOrEmpty(ConfigSettings.WasabiSecretKey) &&
+                        !string.IsNullOrEmpty(ConfigSettings.WasabiBucket))
+                    {
+                        try
+                        {
+                            ConfigData.ImageDownloader downloader = new ConfigData.ImageDownloader
+                            {
+                                WasabiAccessKey = ConfigSettings.WasabiAccessKey,
+                                WasabiSecretKey = ConfigSettings.WasabiSecretKey,
+                                WasabiBucket = ConfigSettings.WasabiBucket,
+                                LocalImageDir = ConfigSettings.LocalImageDir
+                            };
+
+                            if (downloader.SyncFromWasabi())
+                            {
+                                System.Diagnostics.Debug.WriteLine("Images synchronized successfully");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Sync error: {ex.Message}");
+                        }
+                    }
+
                     foreach (ConfigData.Monitor M in ConfigSettings.Slideshow)
                     {
 
                         Thread MonitorThread = new Thread(RunAlbum);
-                        MonitorThread.Start(M);
+                        MonitorThread.Start(new object[] { M, ConfigSettings.LocalImageDir });
 
                     }
 
@@ -117,8 +143,14 @@ namespace MultiSaver
                     foreach (Screen S in System.Windows.Forms.Screen.AllScreens)
                     {
 
+                        var monitor = new ConfigData.Monitor 
+                        { 
+                            Bounds = new System.Drawing.Rectangle(S.Bounds.X, S.Bounds.Y, S.Bounds.Width, S.Bounds.Height),
+                            ID = S.DeviceName
+                        };
+
                         Thread MonitorThread = new Thread(RunAlbum);
-                        MonitorThread.Start(new ConfigData.Monitor { Bounds = new System.Drawing.Rectangle(S.Bounds.X, S.Bounds.Y, S.Bounds.Width, S.Bounds.Height) });
+                        MonitorThread.Start(new object[] { monitor, "" });
 
                     }
 
@@ -169,7 +201,9 @@ namespace MultiSaver
             using (Album game = new Album())
             {
 
-                ConfigData.Monitor Mon = (ConfigData.Monitor)Args;
+                object[] parameters = Args as object[];
+                ConfigData.Monitor Mon = (ConfigData.Monitor)parameters[0];
+                string localImageDir = (string)parameters[1];
 
                 Control C = Form.FromHandle(game.Window.Handle);
                 Form F = C.FindForm();
@@ -177,7 +211,17 @@ namespace MultiSaver
                 F.FormBorderStyle = FormBorderStyle.None;
                 game.Bounds = new Rectangle(Mon.Bounds.X, Mon.Bounds.Y, Mon.Bounds.Width, Mon.Bounds.Height);
                 
-                game.Location = Mon.Source;
+                // Configurar ubicación de imágenes
+                if (!string.IsNullOrEmpty(localImageDir))
+                {
+                    game.Location = Mon.GetImageFolder(localImageDir);
+                    game.RequiredOrientation = Mon.GetCalculatedOrientation();
+                }
+                else if (Mon.Source != null)
+                {
+                    game.Location = Mon.Source;
+                }
+
                 game.TransitionMode = Mon.TransitionMode;
                 game.Order = Mon.Order;
 

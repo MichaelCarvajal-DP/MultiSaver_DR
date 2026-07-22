@@ -15,6 +15,12 @@ namespace MultiSaver.ConfigData
         public List<Monitor> Maze = new List<Monitor>();
         public List<Monitor> Slideshow = new List<Monitor>();
 
+        // Configuración de Wasabi S3
+        public string WasabiAccessKey = "";
+        public string WasabiSecretKey = "";
+        public string WasabiBucket = "";
+        public string LocalImageDir = "C:\\Screensavers\\Images";
+
         public void SetMonitorMode(String DisplayName, String Mode)
         {
              List<Monitor> PutIn;
@@ -112,6 +118,29 @@ namespace MultiSaver.ConfigData
                 Maze.Clear();
                 Slideshow.Clear();
 
+                // Cargar configuración de Wasabi si existe
+                try
+                {
+                    var wasabiNode = Configuration.Children.FirstOrDefault(c => c.Name == "WasabiConfig");
+                    if (wasabiNode != null && wasabiNode.Attributes != null)
+                    {
+                        var accessKeyAttr = wasabiNode.Attributes.FirstOrDefault(a => a.Name == "AccessKey");
+                        var secretKeyAttr = wasabiNode.Attributes.FirstOrDefault(a => a.Name == "SecretKey");
+                        var bucketAttr = wasabiNode.Attributes.FirstOrDefault(a => a.Name == "Bucket");
+                        var imageDirAttr = wasabiNode.Attributes.FirstOrDefault(a => a.Name == "LocalImageDir");
+
+                        if (accessKeyAttr != null)
+                            WasabiAccessKey = accessKeyAttr.Value;
+                        if (secretKeyAttr != null)
+                            WasabiSecretKey = secretKeyAttr.Value;
+                        if (bucketAttr != null)
+                            WasabiBucket = bucketAttr.Value;
+                        if (imageDirAttr != null)
+                            LocalImageDir = imageDirAttr.Value;
+                    }
+                }
+                catch { }
+
                 XmlHelper.Node UnassignedMonitors = Configuration.Children[1].Children[0];
 
                 foreach (XmlHelper.Node N in UnassignedMonitors.Children)
@@ -171,6 +200,18 @@ namespace MultiSaver.ConfigData
                     M.MinTime = Convert.ToInt32(N.Attributes[14].Value);
                     M.MaxTime = Convert.ToInt32(N.Attributes[15].Value);
 
+                    // Cargar orientación si existe
+                    try
+                    {
+                        var orientAttr = N.Attributes.FirstOrDefault(a => a.Name == "Orientation");
+                        if (orientAttr != null && !string.IsNullOrEmpty(orientAttr.Value))
+                        {
+                            if (Enum.TryParse<Monitor.OrientationType>(orientAttr.Value, out var orient))
+                                M.Orientation = orient;
+                        }
+                    }
+                    catch { }
+
                     Slideshow.Add(M);
 
                 }
@@ -190,6 +231,14 @@ namespace MultiSaver.ConfigData
             Writer.WriteStartDocument();
 
             Writer.WriteStartElement("Configuration");
+
+            // Guardar configuración de Wasabi
+            Writer.WriteStartElement("WasabiConfig");
+            Writer.WriteAttributeString("AccessKey", WasabiAccessKey ?? "");
+            Writer.WriteAttributeString("SecretKey", WasabiSecretKey ?? "");
+            Writer.WriteAttributeString("Bucket", WasabiBucket ?? "");
+            Writer.WriteAttributeString("LocalImageDir", LocalImageDir ?? "");
+            Writer.WriteEndElement();
 
             #region Unassigned
 
@@ -269,6 +318,9 @@ namespace MultiSaver.ConfigData
                 Writer.WriteAttributeString("FixedTime", Convert.ToString(M.FixedTime));
                 Writer.WriteAttributeString("MinTime", Convert.ToString(M.MinTime));
                 Writer.WriteAttributeString("MaxTime", Convert.ToString(M.MaxTime));
+
+                // Guardar orientación
+                Writer.WriteAttributeString("Orientation", M.Orientation.ToString());
 
                 Writer.WriteEndElement();
 
